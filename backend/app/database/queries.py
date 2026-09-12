@@ -1,162 +1,93 @@
-from .connection import pool
+from collections.abc import Mapping, Sequence
+from typing import Any
+
+from psycopg import sql
+from psycopg.rows import dict_row
+
+from app.database.connection import get_connection
 
 
-def _fetch_all_as_dicts(conn, query):
-    result = conn.execute(query)
-    columns = [column[0] for column in result.description] if result.description else []
-    return [dict(zip(columns, row)) for row in result.fetchall()]
+def list_records(table: str, columns: Sequence[str]) -> list[dict[str, Any]]:
+    query = sql.SQL("SELECT {columns} FROM {table} ORDER BY id").format(
+        columns=sql.SQL(", ").join(map(sql.Identifier, columns)),
+        table=sql.Identifier(table),
+    )
+    with get_connection() as connection:
+        with connection.cursor(row_factory=dict_row) as cursor:
+            cursor.execute(query)
+            return cursor.fetchall()
 
 
-def get_professors():
-    with pool.connection() as conn:
-        query = """
-            SELECT
-                id,
-                name,
-                email
-            FROM professors
-            ORDER BY id;
-        """
-        return _fetch_all_as_dicts(conn, query)
+def get_record(
+    table: str, columns: Sequence[str], record_id: int
+) -> dict[str, Any] | None:
+    query = sql.SQL("SELECT {columns} FROM {table} WHERE id = %s").format(
+        columns=sql.SQL(", ").join(map(sql.Identifier, columns)),
+        table=sql.Identifier(table),
+    )
+    with get_connection() as connection:
+        with connection.cursor(row_factory=dict_row) as cursor:
+            cursor.execute(query, (record_id,))
+            return cursor.fetchone()
 
 
-def get_rooms():
-    with pool.connection() as conn:
-        query = """
-            SELECT
-                id,
-                name,
-                capacity,
-                room_type
-            FROM rooms
-            ORDER BY id;
-        """
-        return _fetch_all_as_dicts(conn, query)
+def create_record(
+    table: str, columns: Sequence[str], values: Mapping[str, Any]
+) -> dict[str, Any]:
+    insert_columns = sql.SQL(", ").join(map(sql.Identifier, values))
+    placeholders = ", ".join("%s" for _ in values)
+    returned_columns = sql.SQL(", ").join(map(sql.Identifier, columns))
+    query = sql.SQL(
+        "INSERT INTO {table} ({insert_columns}) VALUES ({placeholders}) RETURNING {columns}"
+    ).format(
+        table=sql.Identifier(table),
+        insert_columns=insert_columns,
+        placeholders=sql.SQL(placeholders),
+        columns=returned_columns,
+    )
+    with get_connection() as connection:
+        with connection.cursor(row_factory=dict_row) as cursor:
+            cursor.execute(query, tuple(values.values()))
+            record = cursor.fetchone()
+            if record is None:
+                raise RuntimeError("Insert did not return the created record")
+            connection.commit()
+            return record
 
 
-def get_student_groups():
-    with pool.connection() as conn:
-        query = """
-            SELECT
-                id,
-                name,
-                size
-            FROM student_groups
-            ORDER BY id;
-        """
-        return _fetch_all_as_dicts(conn, query)
+def update_record(
+    table: str,
+    columns: Sequence[str],
+    record_id: int,
+    values: Mapping[str, Any],
+) -> dict[str, Any] | None:
+    assignments = sql.SQL(", ").join(
+        sql.SQL("{column} = %s").format(column=sql.Identifier(column))
+        for column in values
+    )
+    returned_columns = sql.SQL(", ").join(map(sql.Identifier, columns))
+    query = sql.SQL(
+        "UPDATE {table} SET {assignments} WHERE id = %s RETURNING {columns}"
+    ).format(
+        table=sql.Identifier(table),
+        assignments=assignments,
+        columns=returned_columns,
+    )
+    with get_connection() as connection:
+        with connection.cursor(row_factory=dict_row) as cursor:
+            cursor.execute(query, (*values.values(), record_id))
+            record = cursor.fetchone()
+            connection.commit()
+            return record
 
 
-def get_course_sections():
-    with pool.connection() as conn:
-        query = """
-            SELECT
-                id,
-                course_id,
-                semester_id,
-                professor_id,
-                section_name,
-            FROM course_sections
-            ORDER BY id;
-        """
-        return _fetch_all_as_dicts(conn, query)
-
-
-def get_course_section_student_groups():
-    with pool.connection() as conn:
-        query = """
-            SELECT
-                course_section_id,
-                student_group_id
-            FROM course_section_student_groups
-            ORDER BY section_id, student_group_id;
-        """
-        return _fetch_all_as_dicts(conn, query)
-
-
-def get_equipment():
-    with pool.connection() as conn:
-        query = """
-            SELECT
-                id,
-                name
-            FROM equipment
-            ORDER BY id;
-        """
-
-        return _fetch_all_as_dicts(conn, query)
-
-
-def get_room_equipment():
-    with pool.connection() as conn:
-        query = """
-            SELECT
-                room_id,
-                equipment_id,
-                quantity
-            FROM room_equipment
-            ORDER BY room_id, equipment_id;
-        """
-
-        return _fetch_all_as_dicts(conn, query)
-
-
-def get_professor_availability():
-    with pool.connection() as conn:
-        query = """
-            SELECT
-                id,
-                professor_id,
-                day_of_week,
-                start_time,
-                end_time
-            FROM professor_availability
-            ORDER BY professor_id, day_of_week, start_time;
-        """
-
-        return _fetch_all_as_dicts(conn, query)
-
-
-def get_room_availability():
-    with pool.connection() as conn:
-        query = """
-            SELECT
-                id,
-                room_id,
-                day_of_week,
-                start_time,
-                end_time
-            FROM room_availability
-            ORDER BY room_id, day_of_week, start_time;
-        """
-
-        return _fetch_all_as_dicts(conn, query)
-
-
-def get_course_requirements():
-    with pool.connection() as conn:
-        query = """
-            SELECT
-                id,
-                course_id,
-                room_type,
-                min_capacity
-            FROM course_requirements
-            ORDER BY course_id, id;
-        """
-
-        return _fetch_all_as_dicts(conn, query)
-
-
-def get_course_required_equipment():
-    with pool.connection() as conn:
-        query = """
-            SELECT
-                course_id,
-                equipment_id,
-                quantity
-            FROM course_required_equipment
-            ORDER BY course_id, equipment_id;
-        """
-
-        return _fetch_all_as_dicts(conn, query)
+def delete_record(table: str, columns: Sequence[str], record_id: int) -> bool:
+    query = sql.SQL("DELETE FROM {table} WHERE id = %s").format(
+        table=sql.Identifier(table)
+    )
+    with get_connection() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(query, (record_id,))
+            deleted = cursor.rowcount > 0
+            connection.commit()
+            return deleted

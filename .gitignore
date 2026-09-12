@@ -1,6 +1,29 @@
+# Python
 venv/
 .venv/
 __pycache__/
+*.py[cod]
+
+# Environment variables
 .env
-*.pyc
+.env.*
+
+# IDE
 .vscode/
+.idea/
+
+# Node
+node_modules/
+.next/
+
+# OS
+.DS_Store
+
+# Testing / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Build artifacts
+dist/
+build/

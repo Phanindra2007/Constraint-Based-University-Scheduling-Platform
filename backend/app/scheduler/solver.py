@@ -12,6 +12,7 @@ from app.scheduler.models import (
     SchedulingRoomAvailability,
     SchedulingSession,
 )
+from app.scheduler.scoring import ScheduleResult, ScheduleScore
 from app.scheduler.variables import SessionVariables
 
 
@@ -50,7 +51,7 @@ def solve_schedule(
     rooms: list[SchedulingRoom],
     faculty_availability: list[SchedulingFacultyAvailability],
     room_availability: list[SchedulingRoomAvailability],
-) -> list[dict]:
+) -> ScheduleResult:
     """Solve the current hard-constraint model using the supplied rooms."""
 
     model, session_variables = build_scheduling_model(
@@ -79,13 +80,24 @@ def solve_schedule(
         raise RuntimeError(f"Unexpected CP-SAT solver status: {status}.")
 
     # Extract the one selected placement for each session in input order.
-    return [
+    placements = [
         _extract_session_result(solver, session, variables)
         for session, variables in zip(sessions, session_variables)
     ]
 
+    return ScheduleResult(
+        placements=placements,
+        score=ScheduleScore(
+            batch_gap_penalty=0,
+            faculty_idle_penalty=0,
+            faculty_preference_penalty=0,
+            room_waste_penalty=0,
+            total_penalty=0,
+        ),
+    )
 
-def solve_schedule_for_semester(semester_id: int) -> list[dict]:
+
+def solve_schedule_for_semester(semester_id: int) -> ScheduleResult:
     """Load and solve the timetable data for one semester."""
 
     (

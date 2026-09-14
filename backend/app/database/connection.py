@@ -14,6 +14,7 @@ pool = ConnectionPool(
     ),
     min_size=2,
     max_size=10,
+    open=True,
 )
 
 

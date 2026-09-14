@@ -2,6 +2,7 @@ from app.scheduler.config import NUM_DAYS, NUM_PERIODS
 from app.scheduler.data import load_scheduler_data
 from app.scheduler.persistence import save_timetable
 from app.scheduler.solver import solve_schedule
+from app.scheduler.validation import validate_schedule
 
 
 def generate_timetable(semester_id: int) -> int:
@@ -21,6 +22,13 @@ def generate_timetable(semester_id: int) -> int:
         rooms=rooms,
         faculty_availability=faculty_availability,
         room_availability=room_availability,
+    )
+    validate_schedule(
+        sessions=sessions,
+        rooms=rooms,
+        faculty_availability=faculty_availability,
+        room_availability=room_availability,
+        placements=placements,
     )
 
     return save_timetable(semester_id, placements)

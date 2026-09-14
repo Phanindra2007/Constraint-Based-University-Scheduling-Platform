@@ -12,8 +12,11 @@ from app.scheduler.models import (
     SchedulingRoomAvailability,
     SchedulingSession,
 )
-from app.scheduler.scoring import ScheduleResult, ScheduleScore
-from app.scheduler.scoring import SchedulingFacultyPreference
+from app.scheduler.scoring import (
+    ScheduleResult,
+    SchedulingFacultyPreference,
+    calculate_schedule_score,
+)
 from app.scheduler.variables import SessionVariables
 
 
@@ -63,6 +66,7 @@ def solve_schedule(
         rooms,
         faculty_availability,
         room_availability,
+        faculty_preferences,
     )
     solver = cp_model.CpSolver()
 
@@ -86,17 +90,14 @@ def solve_schedule(
         _extract_session_result(solver, session, variables)
         for session, variables in zip(sessions, session_variables)
     ]
-
-    return ScheduleResult(
+    score = calculate_schedule_score(
+        sessions=sessions,
+        rooms=rooms,
+        faculty_preferences=faculty_preferences,
         placements=placements,
-        score=ScheduleScore(
-            batch_gap_penalty=0,
-            faculty_idle_penalty=0,
-            faculty_preference_penalty=0,
-            room_waste_penalty=0,
-            total_penalty=0,
-        ),
     )
+
+    return ScheduleResult(placements=placements, score=score)
 
 
 def solve_schedule_for_semester(semester_id: int) -> ScheduleResult:

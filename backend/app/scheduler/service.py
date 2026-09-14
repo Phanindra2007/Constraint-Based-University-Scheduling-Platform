@@ -34,4 +34,4 @@ def generate_timetable(semester_id: int) -> int:
         placements=placements,
     )
 
-    return save_timetable(semester_id, placements)
+    return save_timetable(semester_id, placements, result.score.total_penalty)

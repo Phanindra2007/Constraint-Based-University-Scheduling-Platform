@@ -40,7 +40,7 @@ def _period_range_to_times(
     )
 
 
-def save_timetable(semester_id: int, placements: list[dict]) -> int:
+def save_timetable(semester_id: int, placements: list[dict], score: int) -> int:
     """Persist one generated timetable and all of its placements atomically."""
 
     with get_connection() as connection:
@@ -65,10 +65,10 @@ def save_timetable(semester_id: int, placements: list[dict]) -> int:
                     """
                     INSERT INTO timetables
                         (semester_id, version_number, score, status)
-                    VALUES (%s, %s, NULL, %s)
+                    VALUES (%s, %s, %s, %s)
                     RETURNING id
                     """,
-                    (semester_id, version_number, "ACTIVE"),
+                    (semester_id, version_number, score, "ACTIVE"),
                 )
                 timetable_row = cursor.fetchone()
                 if timetable_row is None:

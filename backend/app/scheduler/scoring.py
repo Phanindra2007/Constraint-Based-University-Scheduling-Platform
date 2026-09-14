@@ -1,8 +1,10 @@
 from dataclasses import dataclass
 from collections.abc import Sequence
 
+from app.scheduler import config
 from app.scheduler.config import MAX_PREFERENCE_SCORE, TEACHING_BLOCKS
 from app.scheduler.models import SchedulingRoom, SchedulingSession
+from app.scheduler.variables import PlacementVariables
 
 
 @dataclass
@@ -34,6 +36,63 @@ class ScheduleResult:
     score: ScheduleScore
 
 
+def _validate_scoring_weights() -> None:
+    weights = {
+        "BATCH_GAP_WEIGHT": config.BATCH_GAP_WEIGHT,
+        "FACULTY_IDLE_WEIGHT": config.FACULTY_IDLE_WEIGHT,
+        "FACULTY_PREFERENCE_WEIGHT": config.FACULTY_PREFERENCE_WEIGHT,
+        "ROOM_WASTE_WEIGHT": config.ROOM_WASTE_WEIGHT,
+    }
+    invalid_weights = [
+        name
+        for name, weight in weights.items()
+        if isinstance(weight, bool) or not isinstance(weight, int) or weight < 0
+    ]
+    if invalid_weights:
+        raise ValueError(
+            "Scoring weights must be non-negative integers: "
+            + ", ".join(invalid_weights)
+        )
+
+
+def calculate_schedule_score(
+    sessions: Sequence[SchedulingSession],
+    rooms: Sequence[SchedulingRoom],
+    faculty_preferences: Sequence[SchedulingFacultyPreference],
+    placements: Sequence[dict],
+) -> ScheduleScore:
+    """Calculate all soft-constraint penalties and their weighted total."""
+
+    _validate_scoring_weights()
+
+    batch_gap_penalty = calculate_batch_gap_penalty(sessions, placements)
+    faculty_idle_penalty = calculate_faculty_idle_penalty(sessions, placements)
+    faculty_preference_penalty = calculate_faculty_preference_penalty(
+        sessions,
+        placements,
+        faculty_preferences,
+    )
+    room_waste_penalty = calculate_room_waste_penalty(
+        sessions,
+        rooms,
+        placements,
+    )
+    total_penalty = (
+        config.BATCH_GAP_WEIGHT * batch_gap_penalty
+        + config.FACULTY_IDLE_WEIGHT * faculty_idle_penalty
+        + config.FACULTY_PREFERENCE_WEIGHT * faculty_preference_penalty
+        + config.ROOM_WASTE_WEIGHT * room_waste_penalty
+    )
+
+    return ScheduleScore(
+        batch_gap_penalty=batch_gap_penalty,
+        faculty_idle_penalty=faculty_idle_penalty,
+        faculty_preference_penalty=faculty_preference_penalty,
+        room_waste_penalty=room_waste_penalty,
+        total_penalty=total_penalty,
+    )
+
+
 def calculate_faculty_preference_penalty(
     sessions: Sequence[SchedulingSession],
     placements: Sequence[dict],
@@ -44,17 +103,6 @@ def calculate_faculty_preference_penalty(
     sessions_by_key = {
         (session.offering_id, session.session_number): session for session in sessions
     }
-    scores_by_faculty_day_period: dict[tuple[int, int, int], int] = {}
-    for preference in preferences:
-        for period in preference.preferred_periods:
-            key = (preference.faculty_id, preference.day, period)
-            existing_score = scores_by_faculty_day_period.get(key)
-            scores_by_faculty_day_period[key] = (
-                preference.preference_score
-                if existing_score is None
-                else max(existing_score, preference.preference_score)
-            )
-
     penalty = 0
     for placement in placements:
         session_key = (placement["offering_id"], placement["session_number"])
@@ -73,13 +121,70 @@ def calculate_faculty_preference_penalty(
             start_period + session.duration_periods,
         )
         for period in occupied_periods:
-            matched_score = scores_by_faculty_day_period.get(
-                (session.faculty_id, day, period)
+            penalty += calculate_faculty_preference_period_penalty(
+                faculty_id=session.faculty_id,
+                day=day,
+                period=period,
+                preferences=preferences,
             )
-            if matched_score is not None:
-                penalty += MAX_PREFERENCE_SCORE - matched_score
 
     return penalty
+
+
+def calculate_faculty_preference_period_penalty(
+    faculty_id: int,
+    day: int,
+    period: int,
+    preferences: Sequence[SchedulingFacultyPreference],
+) -> int:
+    """Calculate one period's faculty preference penalty."""
+
+    matching_scores = [
+        preference.preference_score
+        for preference in preferences
+        if preference.faculty_id == faculty_id
+        and preference.day == day
+        and period in preference.preferred_periods
+    ]
+    if not matching_scores:
+        return 0
+    return MAX_PREFERENCE_SCORE - max(matching_scores)
+
+
+def calculate_placement_objective_cost(
+    session: SchedulingSession,
+    room: SchedulingRoom,
+    placement: PlacementVariables,
+    preferences: Sequence[SchedulingFacultyPreference],
+) -> int:
+    """Calculate the weighted objective coefficient for one placement."""
+
+    room_waste = room.capacity - session.student_count
+    if room_waste < 0:
+        raise ValueError(
+            "Room capacity is below session student count: "
+            f"room_id={room.id}, capacity={room.capacity}, "
+            f"student_count={session.student_count}, "
+            f"offering_id={session.offering_id}, "
+            f"session_number={session.session_number}."
+        )
+
+    preference_penalty = sum(
+        calculate_faculty_preference_period_penalty(
+            faculty_id=session.faculty_id,
+            day=placement.day,
+            period=period,
+            preferences=preferences,
+        )
+        for period in range(
+            placement.start_period,
+            placement.start_period + session.duration_periods,
+        )
+    )
+    return (
+        config.ROOM_WASTE_WEIGHT * room_waste
+        + config.FACULTY_PREFERENCE_WEIGHT * preference_penalty
+    )
 
 
 def calculate_room_waste_penalty(

@@ -2,6 +2,8 @@ from typing import Sequence
 
 from ortools.sat.python import cp_model
 
+from app.scheduler.config import NUM_DAYS, NUM_PERIODS
+from app.scheduler.data import load_scheduler_data
 from app.scheduler.model import build_scheduling_model
 from app.scheduler.models import (
     SchedulingFacultyAvailability,
@@ -78,3 +80,23 @@ def solve_schedule(
         _extract_session_result(solver, session, variables)
         for session, variables in zip(sessions, session_variables)
     ]
+
+
+def solve_schedule_for_semester(semester_id: int) -> list[dict]:
+    """Load and solve the timetable data for one semester."""
+
+    (
+        sessions,
+        rooms,
+        faculty_availability,
+        room_availability,
+    ) = load_scheduler_data(semester_id)
+
+    return solve_schedule(
+        sessions=sessions,
+        num_days=NUM_DAYS,
+        num_periods=NUM_PERIODS,
+        rooms=rooms,
+        faculty_availability=faculty_availability,
+        room_availability=room_availability,
+    )

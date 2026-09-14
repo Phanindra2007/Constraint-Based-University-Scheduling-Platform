@@ -2,7 +2,7 @@ from dataclasses import dataclass
 
 from ortools.sat.python import cp_model
 
-from app.scheduler.config import TEACHING_BLOCKS
+from app.scheduler.config import ANY_ROOM_TYPE, TEACHING_BLOCKS
 from app.scheduler.models import (
     SchedulingFacultyAvailability,
     SchedulingRoom,
@@ -59,7 +59,10 @@ def create_session_variables(
         room
         for room in rooms
         if room.capacity >= session.student_count
-        and room.room_type == session.required_room_type
+        and (
+            session.required_room_type == ANY_ROOM_TYPE
+            or room.room_type == session.required_room_type
+        )
     ]
     if not suitable_rooms:
         raise ValueError(

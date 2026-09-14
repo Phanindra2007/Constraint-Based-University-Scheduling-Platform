@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from collections.abc import Sequence
 
 from app.scheduler.config import MAX_PREFERENCE_SCORE
-from app.scheduler.models import SchedulingSession
+from app.scheduler.models import SchedulingRoom, SchedulingSession
 
 
 @dataclass
@@ -78,5 +78,50 @@ def calculate_faculty_preference_penalty(
             )
             if matched_score is not None:
                 penalty += MAX_PREFERENCE_SCORE - matched_score
+
+    return penalty
+
+
+def calculate_room_waste_penalty(
+    sessions: Sequence[SchedulingSession],
+    rooms: Sequence[SchedulingRoom],
+    placements: Sequence[dict],
+) -> int:
+    """Calculate unused room capacity once for each selected session."""
+
+    sessions_by_key = {
+        (session.offering_id, session.session_number): session for session in sessions
+    }
+    rooms_by_id = {room.id: room for room in rooms}
+
+    penalty = 0
+    for placement in placements:
+        session_key = (placement["offering_id"], placement["session_number"])
+        try:
+            session = sessions_by_key[session_key]
+        except KeyError as error:
+            raise ValueError(
+                "Placement does not match a scheduling session: "
+                f"offering_id={session_key[0]}, session_number={session_key[1]}."
+            ) from error
+
+        room_id = placement["room_id"]
+        try:
+            room = rooms_by_id[room_id]
+        except KeyError as error:
+            raise ValueError(
+                f"Placement references unknown room_id={room_id}."
+            ) from error
+
+        room_waste = room.capacity - session.student_count
+        if room_waste < 0:
+            raise ValueError(
+                "Room capacity is below session student count: "
+                f"room_id={room.id}, capacity={room.capacity}, "
+                f"student_count={session.student_count}, "
+                f"offering_id={session.offering_id}, "
+                f"session_number={session.session_number}."
+            )
+        penalty += room_waste
 
     return penalty

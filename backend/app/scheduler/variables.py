@@ -88,14 +88,12 @@ def create_session_variables(
             ):
                 start_period = teaching_block[block_index]
                 for room in suitable_rooms:
-                    room_periods = set().union(
-                        *(
-                            availability.available_periods
-                            for availability in room_availability
-                            if availability.room_id == room.id
-                            and availability.day == day
-                        )
-                    )
+                    room_periods = set()
+
+                    for availability in room_availability:
+                        if availability.room_id == room.id and availability.day == day:
+                            room_periods.update(availability.available_periods)
+
                     if not is_period_range_available(
                         faculty_periods,
                         start_period,

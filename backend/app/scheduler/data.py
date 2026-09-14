@@ -6,6 +6,8 @@ from psycopg.rows import dict_row
 from app.database.connection import get_connection
 from app.scheduler.config import (
     ANY_ROOM_TYPE,
+    MAX_PREFERENCE_SCORE,
+    MIN_PREFERENCE_SCORE,
     NUM_DAYS,
     PERIOD_DURATION_MINUTES,
     TEACHING_BLOCKS,
@@ -17,6 +19,7 @@ from app.scheduler.models import (
     SchedulingRoomAvailability,
     SchedulingSession,
 )
+from app.scheduler.scoring import SchedulingFacultyPreference
 
 
 def duration_minutes_to_periods(duration_minutes: int) -> int:
@@ -188,6 +191,53 @@ def load_room_availability(semester_id: int) -> list[SchedulingRoomAvailability]
     ]
 
 
+def load_faculty_preferences(
+    semester_id: int,
+) -> list[SchedulingFacultyPreference]:
+    """Load and convert semester-scoped faculty preference windows."""
+
+    rows = _fetch_all(
+        """
+        SELECT faculty_id, day_of_week, start_time, end_time, preference_score
+        FROM faculty_preferences
+        WHERE semester_id = %s
+          AND day_of_week BETWEEN 1 AND %s
+        ORDER BY faculty_id, day_of_week, start_time
+        """,
+        (semester_id, NUM_DAYS),
+    )
+
+    preferences: list[SchedulingFacultyPreference] = []
+    for row in rows:
+        preference_score = row["preference_score"]
+        if not MIN_PREFERENCE_SCORE <= preference_score <= MAX_PREFERENCE_SCORE:
+            raise ValueError(
+                "Faculty preference score must be between "
+                f"{MIN_PREFERENCE_SCORE} and {MAX_PREFERENCE_SCORE}, got "
+                f"{preference_score} for faculty_id={row['faculty_id']}."
+            )
+
+        preferred_periods = time_range_to_periods(row["start_time"], row["end_time"])
+        if not preferred_periods:
+            raise ValueError(
+                "Faculty preference window has no matching teaching periods: "
+                f"faculty_id={row['faculty_id']}, "
+                f"day_of_week={row['day_of_week']}, "
+                f"start_time={row['start_time']}, end_time={row['end_time']}."
+            )
+
+        preferences.append(
+            SchedulingFacultyPreference(
+                faculty_id=row["faculty_id"],
+                day=row["day_of_week"] - 1,
+                preferred_periods=preferred_periods,
+                preference_score=preference_score,
+            )
+        )
+
+    return preferences
+
+
 def load_scheduler_data(
     semester_id: int,
 ) -> tuple[
@@ -195,6 +245,7 @@ def load_scheduler_data(
     list[SchedulingRoom],
     list[SchedulingFacultyAvailability],
     list[SchedulingRoomAvailability],
+    list[SchedulingFacultyPreference],
 ]:
     """Load all scheduler inputs for one semester."""
 
@@ -203,4 +254,5 @@ def load_scheduler_data(
         load_rooms(),
         load_faculty_availability(semester_id),
         load_room_availability(semester_id),
+        load_faculty_preferences(semester_id),
     )

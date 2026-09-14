@@ -13,6 +13,7 @@ def generate_timetable(semester_id: int) -> int:
         rooms,
         faculty_availability,
         room_availability,
+        faculty_preferences,
     ) = load_scheduler_data(semester_id)
 
     result = solve_schedule(
@@ -22,6 +23,7 @@ def generate_timetable(semester_id: int) -> int:
         rooms=rooms,
         faculty_availability=faculty_availability,
         room_availability=room_availability,
+        faculty_preferences=faculty_preferences,
     )
     placements = result.placements
     validate_schedule(

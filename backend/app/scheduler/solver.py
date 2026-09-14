@@ -13,6 +13,7 @@ from app.scheduler.models import (
     SchedulingSession,
 )
 from app.scheduler.scoring import ScheduleResult, ScheduleScore
+from app.scheduler.scoring import SchedulingFacultyPreference
 from app.scheduler.variables import SessionVariables
 
 
@@ -51,6 +52,7 @@ def solve_schedule(
     rooms: list[SchedulingRoom],
     faculty_availability: list[SchedulingFacultyAvailability],
     room_availability: list[SchedulingRoomAvailability],
+    faculty_preferences: list[SchedulingFacultyPreference],
 ) -> ScheduleResult:
     """Solve the current hard-constraint model using the supplied rooms."""
 
@@ -105,6 +107,7 @@ def solve_schedule_for_semester(semester_id: int) -> ScheduleResult:
         rooms,
         faculty_availability,
         room_availability,
+        faculty_preferences,
     ) = load_scheduler_data(semester_id)
 
     return solve_schedule(
@@ -114,4 +117,5 @@ def solve_schedule_for_semester(semester_id: int) -> ScheduleResult:
         rooms=rooms,
         faculty_availability=faculty_availability,
         room_availability=room_availability,
+        faculty_preferences=faculty_preferences,
     )

@@ -1,5 +1,4 @@
 from datetime import date, datetime, time, timedelta
-from typing import Any, LiteralString
 
 from app.database.connection import get_connection
 from app.scheduler.config import (
@@ -41,25 +40,13 @@ def _period_range_to_times(
     )
 
 
-def _execute(
-    cursor: Any,
-    query: LiteralString,
-    params: tuple[Any, ...] = (),
-) -> Any:
-    """Execute a literal parameterized SQL statement."""
-
-    cursor.execute(query, params)
-    return cursor
-
-
 def save_timetable(semester_id: int, placements: list[dict]) -> int:
     """Persist one generated timetable and all of its placements atomically."""
 
     with get_connection() as connection:
         with connection.transaction():
             with connection.cursor() as cursor:
-                _execute(
-                    cursor,
+                cursor.execute(
                     """
                     SELECT COALESCE(MAX(version_number), 0) + 1
                     FROM timetables
@@ -69,11 +56,12 @@ def save_timetable(semester_id: int, placements: list[dict]) -> int:
                 )
                 version_row = cursor.fetchone()
                 if version_row is None:
-                    raise RuntimeError("Could not determine the next timetable version.")
+                    raise RuntimeError(
+                        "Could not determine the next timetable version."
+                    )
                 version_number = version_row[0]
 
-                _execute(
-                    cursor,
+                cursor.execute(
                     """
                     INSERT INTO timetables
                         (semester_id, version_number, score, status)
@@ -96,8 +84,7 @@ def save_timetable(semester_id: int, placements: list[dict]) -> int:
                     if not 0 <= day < NUM_DAYS:
                         raise ValueError(f"Invalid scheduler day: {day}.")
 
-                    _execute(
-                        cursor,
+                    cursor.execute(
                         """
                         INSERT INTO timetable_slots
                             (

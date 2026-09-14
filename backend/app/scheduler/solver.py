@@ -4,6 +4,7 @@ from ortools.sat.python import cp_model
 
 from app.scheduler.config import NUM_DAYS, NUM_PERIODS
 from app.scheduler.data import load_scheduler_data
+from app.scheduler.exceptions import InfeasibleScheduleError
 from app.scheduler.model import build_scheduling_model
 from app.scheduler.models import (
     SchedulingFacultyAvailability,
@@ -67,7 +68,9 @@ def solve_schedule(
 
     # Check the solver result before attempting to extract placements.
     if status == cp_model.INFEASIBLE:
-        raise ValueError("No timetable satisfies the current hard constraints.")
+        raise InfeasibleScheduleError(
+            "No timetable satisfies the current hard constraints."
+        )
     if status in (cp_model.UNKNOWN, cp_model.MODEL_INVALID):
         raise RuntimeError(
             "The CP-SAT solver could not produce a valid scheduling result."

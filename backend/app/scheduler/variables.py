@@ -72,14 +72,14 @@ def create_session_variables(
     placements = []
 
     for day in range(num_days):
-        faculty_periods = set().union(
-            *(
-                availability.available_periods
-                for availability in faculty_availability
-                if availability.faculty_id == session.faculty_id
+        faculty_periods = set()
+
+        for availability in faculty_availability:
+            if (
+                availability.faculty_id == session.faculty_id
                 and availability.day == day
-            )
-        )
+            ):
+                faculty_periods.update(availability.available_periods)
 
         # Teaching blocks prevent placement windows from crossing the break.
         for teaching_block in TEACHING_BLOCKS:

@@ -371,7 +371,39 @@ CREATE TABLE timetables (
 
 
 -- ============================================================
--- 12. TIMETABLE SLOTS
+-- 12. TIMETABLE GENERATION JOBS
+--     Persistent state for asynchronous timetable-generation requests.
+-- ============================================================
+
+CREATE TABLE timetable_generation_jobs (
+    id             BIGSERIAL,
+    semester_id    BIGINT NOT NULL,
+    status         VARCHAR(20) NOT NULL,
+    timetable_id   BIGINT,
+    error_message  TEXT,
+    created_at     TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    completed_at   TIMESTAMPTZ,
+
+    CONSTRAINT pk_timetable_generation_jobs
+        PRIMARY KEY (id),
+
+    CONSTRAINT fk_timetable_generation_jobs_semester
+        FOREIGN KEY (semester_id)
+        REFERENCES semesters (id)
+        ON DELETE CASCADE,
+
+    CONSTRAINT fk_timetable_generation_jobs_timetable
+        FOREIGN KEY (timetable_id)
+        REFERENCES timetables (id)
+        ON DELETE SET NULL,
+
+    CONSTRAINT ck_timetable_generation_jobs_valid_status
+        CHECK (status IN ('PENDING', 'RUNNING', 'COMPLETED', 'FAILED'))
+);
+
+
+-- ============================================================
+-- 13. TIMETABLE SLOTS
 --     One row = one course_offering placed into one room, at
 --     one day/time, inside one timetable.
 -- ============================================================

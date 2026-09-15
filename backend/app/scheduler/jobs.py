@@ -13,6 +13,10 @@ class JobStatus(StrEnum):
     FAILED = "FAILED"
 
 
+class InvalidJobTransitionError(ValueError):
+    """Raised when a job status transition is not allowed."""
+
+
 @dataclass
 class TimetableGenerationJob:
     """In-memory state for one timetable-generation request."""
@@ -72,6 +76,7 @@ class InMemoryTimetableGenerationJobStore:
     def mark_running(self, job_id: str) -> TimetableGenerationJob:
         with self._lock:
             job = self._require_job(job_id)
+            self._require_status(job, JobStatus.PENDING, JobStatus.RUNNING)
             job.status = JobStatus.RUNNING
             return job
 
@@ -82,6 +87,7 @@ class InMemoryTimetableGenerationJobStore:
     ) -> TimetableGenerationJob:
         with self._lock:
             job = self._require_job(job_id)
+            self._require_status(job, JobStatus.RUNNING, JobStatus.COMPLETED)
             job.status = JobStatus.COMPLETED
             job.timetable_id = timetable_id
             job.error_message = None
@@ -95,6 +101,7 @@ class InMemoryTimetableGenerationJobStore:
     ) -> TimetableGenerationJob:
         with self._lock:
             job = self._require_job(job_id)
+            self._require_status(job, JobStatus.RUNNING, JobStatus.FAILED)
             job.status = JobStatus.FAILED
             job.error_message = error_message
             job.completed_at = datetime.now(timezone.utc)
@@ -105,6 +112,19 @@ class InMemoryTimetableGenerationJobStore:
         if job is None:
             raise KeyError(f"Unknown timetable-generation job_id: {job_id}")
         return job
+
+    def _require_status(
+        self,
+        job: TimetableGenerationJob,
+        expected_status: JobStatus,
+        target_status: JobStatus,
+    ) -> None:
+        if job.status != expected_status:
+            raise InvalidJobTransitionError(
+                f"Cannot transition job_id={job.job_id} from "
+                f"{job.status} to {target_status}; expected "
+                f"{expected_status}."
+            )
 
 
 job_store: TimetableGenerationJobStore = InMemoryTimetableGenerationJobStore()

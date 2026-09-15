@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Path, status
 
 from app.scheduler.jobs import TimetableGenerationJob, job_store
@@ -5,6 +7,7 @@ from app.scheduler.service import generate_timetable
 from app.schemas.jobs import TimetableGenerationJobResponse
 
 router = APIRouter(prefix="/api", tags=["Timetable generation"])
+logger = logging.getLogger(__name__)
 
 
 def run_timetable_generation_job(job: TimetableGenerationJob) -> None:
@@ -13,9 +16,14 @@ def run_timetable_generation_job(job: TimetableGenerationJob) -> None:
     job_store.mark_running(job.job_id)
     try:
         timetable_id = generate_timetable(job.semester_id)
-    except Exception as error:
-        error_message = str(error) or error.__class__.__name__
-        job_store.mark_failed(job.job_id, error_message)
+    except Exception:
+        logger.exception(
+            "Timetable generation failed for job_id=%s semester_id=%s",
+            job.job_id,
+            job.semester_id,
+            extra={"job_id": job.job_id, "semester_id": job.semester_id},
+        )
+        job_store.mark_failed(job.job_id, "Timetable generation failed")
         return
 
     job_store.mark_completed(job.job_id, timetable_id)

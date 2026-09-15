@@ -401,6 +401,10 @@ CREATE TABLE timetable_generation_jobs (
         CHECK (status IN ('PENDING', 'RUNNING', 'COMPLETED', 'FAILED'))
 );
 
+CREATE UNIQUE INDEX uq_timetable_generation_jobs_active_semester
+    ON timetable_generation_jobs (semester_id)
+    WHERE status IN ('PENDING', 'RUNNING');
+
 
 -- ============================================================
 -- 13. TIMETABLE SLOTS

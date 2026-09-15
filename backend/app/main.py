@@ -9,6 +9,7 @@ from app.routers.faculty_preferences import router as faculty_preferences_router
 from app.routers.room_availability import router as room_availability_router
 from app.routers.rooms import router as rooms_router
 from app.routers.semesters import router as semesters_router
+from app.routers.timetable_generation import router as timetable_generation_router
 
 app = FastAPI(title="University Timetable Scheduler")
 
@@ -28,3 +29,4 @@ app.include_router(course_offerings_router)
 app.include_router(faculty_availability_router)
 app.include_router(room_availability_router)
 app.include_router(faculty_preferences_router)
+app.include_router(timetable_generation_router)

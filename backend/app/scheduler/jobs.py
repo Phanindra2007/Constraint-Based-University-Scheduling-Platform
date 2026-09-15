@@ -148,12 +148,6 @@ class InMemoryTimetableGenerationJobStore:
 class PostgresTimetableGenerationJobStore:
     """PostgreSQL-backed implementation of the timetable job store."""
 
-    _TABLE = "timetable_generation_jobs"
-    _COLUMNS = (
-        "id, semester_id, status, timetable_id, error_message, "
-        "created_at, completed_at"
-    )
-
     def create_job(self, semester_id: int) -> TimetableGenerationJob:
         try:
             with get_connection() as connection:
